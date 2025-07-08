@@ -45,8 +45,8 @@ def send_email_notification(to_email, amount):
 
 # ------------------- Streamlit UI -------------------
 
-st.set_page_config(page_title="E-Wallet App", page_icon="\ud83d\udcb0")
-st.title("\ud83d\udcb0 E-Wallet System (Streamlit Version)")
+st.set_page_config(page_title="E-Wallet App")
+st.title("E-Wallet System")
 
 menu = st.sidebar.selectbox("Menu", ["Signup", "Login"])
 users = load_users()
@@ -69,7 +69,7 @@ if menu == "Signup":
             save_users(users)
             st.success("Signup successful! Now login.")
 
-elif menu == "Login":
+if menu == "Login":
     st.subheader("Login to Your Wallet")
     email = st.text_input("Email", key="login_email")
     password = st.text_input("Password", type="password", key="login_password")
@@ -83,30 +83,30 @@ elif menu == "Login":
             if option == "Check Balance":
                 st.info(f"Your current balance: Rs {users[email]['balance']}")
 
-            elif option == "Add Money":
+            if option == "Add Money":
                 method = st.selectbox("Select Payment Method", ["JazzCash", "EasyPaisa", "Bank Transfer"])
                 amount = st.number_input("Enter Amount to Add", min_value=10, max_value=100000)
 
                 if method == "JazzCash":
-                    st.info("Send money to this JazzCash number: 0300-XXXXXXX\n\nAfter sending, click confirm.")
-                elif method == "EasyPaisa":
-                    st.info("Send money to this EasyPaisa number: 0345-XXXXXXX\n\nAfter sending, click confirm.")
+                    st.info("Send money to this JazzCash number: 0300-XXXXXXX")
+                if method == "EasyPaisa":
+                    st.info("Send money to this EasyPaisa number: 0345-XXXXXXX")
                 else:
-                    st.info("Bank Account: 1234567890\nBank: HBL\nTitle: Bilal Wallets\n\nSend and confirm.")
+                    st.info("Bank Account: 1234567890\nBank: HBL\nTitle: Bilal Wallets")
 
                 if st.button("Confirm Payment"):
                     users[email]['balance'] += amount
                     save_users(users)
                     st.success(f"Rs {amount} added to your wallet via {method}")
 
-            elif option == "Transfer Money":
+            if option == "Transfer Money":
                 to_email = st.text_input("Receiver's Email")
                 amount = st.number_input("Amount to transfer", min_value=0)
 
                 if st.button("Transfer"):
                     if to_email not in users:
                         st.warning("Receiver not found.")
-                    elif users[email]['balance'] < amount:
+                    if users[email]['balance'] < amount:
                         st.warning("Insufficient balance.")
                     else:
                         users[email]['balance'] -= amount
@@ -114,14 +114,14 @@ elif menu == "Login":
                         save_users(users)
                         st.success(f"Transferred Rs {amount} to {to_email}")
 
-            elif option == "Withdraw":
+            if option == "Withdraw":
                 withdraw_amount = st.number_input("Enter amount to withdraw", min_value=0)
                 MIN_WITHDRAW = 100
                 MAX_WITHDRAW = 10000
 
                 if withdraw_amount < MIN_WITHDRAW or withdraw_amount > MAX_WITHDRAW:
                     st.error(f"Withdraw amount must be between Rs {MIN_WITHDRAW} and Rs {MAX_WITHDRAW}")
-                elif st.button("Withdraw Now"):
+                if st.button("Withdraw Now"):
                     if users[email]['balance'] < withdraw_amount:
                         st.error("Insufficient balance.")
                     else:
@@ -146,8 +146,8 @@ elif menu == "Login":
                         send_email_notification(email, withdraw_amount)
                         st.success("Withdraw request sent. Status: Pending")
 
-            elif option == "Withdraw History":
-                st.subheader("\ud83d\uddde Your Withdraw History")
+            if option == "Withdraw History":
+                st.subheader("Your Withdraw History")
                 if os.path.exists("withdraws.json"):
                     with open("withdraws.json", "r") as f:
                         all_requests = json.load(f)
@@ -158,8 +158,8 @@ elif menu == "Login":
                 else:
                     st.info("No withdraw history yet.")
 
-            elif option == "Recharge":
-                st.subheader("\ud83d\udcf1 Recharge Mobile Balance")
+            if option == "Recharge":
+                st.subheader("Recharge Mobile Balance")
                 mobile = st.text_input("Enter Mobile Number")
                 operator = st.selectbox("Select Operator", ["Jazz", "Zong", "Telenor", "Ufone"])
                 recharge_amount = st.number_input("Recharge Amount", min_value=10, max_value=5000)
@@ -167,15 +167,15 @@ elif menu == "Login":
                 if st.button("Recharge Now"):
                     if users[email]['balance'] < recharge_amount:
                         st.error("Insufficient balance.")
-                    elif len(mobile) != 11 or not mobile.isdigit():
+                    if len(mobile) != 11 or not mobile.isdigit():
                         st.error("Enter a valid 11-digit mobile number.")
                     else:
                         users[email]['balance'] -= recharge_amount
                         save_users(users)
                         st.success(f"Recharge of Rs {recharge_amount} to {mobile} ({operator}) successful.")
 
-            elif option == "Profile":
-                st.subheader("\ud83d\udc64 Your Profile")
+            if option == "Profile":
+                st.subheader("Your Profile")
                 user_data = users[email]
 
                 new_name = st.text_input("Name", value=user_data["name"])
@@ -199,7 +199,7 @@ elif menu == "Login":
 
 # Admin Panel
 st.sidebar.markdown("---")
-admin_mode = st.sidebar.checkbox("\ud83d\udc51 Admin Login")
+admin_mode = st.sidebar.checkbox("Admin Login")
 
 if admin_mode:
     st.subheader("Admin Panel")
@@ -219,13 +219,13 @@ if admin_mode:
                         st.write(f"Request {i+1}: {req['user']} wants to withdraw Rs {req['amount']}")
 
                         col1, col2 = st.columns(2)
-                        if col1.button(f"\u2705 Approve {i}", key=f"approve_{i}"):
+                        if col1.button(f"Approve {i}", key=f"approve_{i}"):
                             withdraws[i]["status"] = "Approved"
                             with open("withdraws.json", "w") as f:
                                 json.dump(withdraws, f)
                             st.success("Approved.")
 
-                        if col2.button(f"\u274c Reject {i}", key=f"reject_{i}"):
+                        if col2.button(f"Reject {i}", key=f"reject_{i}"):
                             withdraws[i]["status"] = "Rejected"
                             users = load_users()
                             users[req['user']]['balance'] += req['amount']
@@ -234,12 +234,12 @@ if admin_mode:
                                 json.dump(withdraws, f)
                             st.warning("Rejected and amount refunded.")
 
-            st.subheader("\ud83d\udcca Dashboard Stats")
+            st.subheader("Dashboard Stats")
             total_users = len(users)
-            st.info(f"\ud83d\udc65 Total Users: {total_users}")
+            st.info(f"Total Users: {total_users}")
 
             total_balance = sum(user['balance'] for user in users.values())
-            st.info(f"\ud83d\udcb0 Total Wallet Balance: Rs {total_balance}")
+            st.info(f"Total Wallet Balance: Rs {total_balance}")
 
             if os.path.exists("withdraws.json"):
                 with open("withdraws.json", "r") as f:
@@ -249,10 +249,10 @@ if admin_mode:
                 approved = sum(1 for w in withdraws if w['status'] == "Approved")
                 rejected = sum(1 for w in withdraws if w['status'] == "Rejected")
 
-                st.info(f"\ud83d\udce6 Total Withdraw Requests: {total_requests}")
-                st.success(f"\u2705 Approved: {approved}")
-                st.warning(f"\ud83d\udd52 Pending: {pending}")
-                st.error(f"\u274c Rejected: {rejected}")
+                st.info(f"Total Withdraw Requests: {total_requests}")
+                st.success(f"Approved: {approved}")
+                st.warning(f"Pending: {pending}")
+                st.error(f"Rejected: {rejected}")
             else:
                 st.info("No withdraw data found.")
         else:

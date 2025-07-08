@@ -88,6 +88,17 @@ elif menu == "Login":
         else:
             st.error("Login failed. Check email or password.")
 option = st.selectbox("Options", ["Check Balance", "Add Money", "Transfer Money", "Withdraw"])
+option = st.selectbox("Options", ["Check Balance", "Add Money", "Transfer Money", "Withdraw"])
+
+if option == "Check Balance":
+    st.info(f"Your balance: Rs {users[email]['balance']}")
+
+elif option == "Add Money":
+    # Add money block...
+
+elif option == "Transfer Money":
+    # Transfer block...
+
 elif option == "Withdraw":
     withdraw_amount = st.number_input("Enter amount to withdraw", min_value=0)
 
@@ -98,16 +109,6 @@ elif option == "Withdraw":
             users[email]['balance'] -= withdraw_amount
             save_users(users)
             st.success(f"Rs {withdraw_amount} withdrawn successfully.")
-            st.info(f"Remaining Balance: Rs {users[email]['balance']}")
-elif option == "Withdraw":
-    withdraw_amount = st.number_input("Enter amount to withdraw", min_value=0)
-
-    if st.button("Request Withdraw"):
-        if users[email]['balance'] < withdraw_amount:
-            st.error("Insufficient balance.")
-        else:
-            users[email]['balance'] -= withdraw_amount
-            save_users(users)
 
             withdraws = []
             if os.path.exists("withdraws.json"):

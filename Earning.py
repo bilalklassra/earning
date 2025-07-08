@@ -5,6 +5,7 @@ import hashlib
 from datetime import datetime
 import smtplib
 from email.message import EmailMessage
+import pandas as pd
 
 # ------------------- Helper Functions -------------------
 
@@ -24,7 +25,7 @@ def hash_password(password):
 def authenticate(email, password):
     users = load_users()
     if email in users and users[email]["password"] == hash_password(password):
-        return True
+        return users[email].get("status", "active") == "active"
     return False
 
 def send_email_notification(to_email, amount):
@@ -43,7 +44,7 @@ def send_email_notification(to_email, amount):
     except:
         print("Email send failed")
 
-# ------------------- Streamlit UI -------------------
+# ------------------- UI -------------------
 
 st.set_page_config(page_title="E-Wallet App")
 st.title("E-Wallet System")
@@ -52,7 +53,7 @@ menu = st.sidebar.selectbox("Menu", ["Signup", "Login"])
 users = load_users()
 
 if menu == "Signup":
-    st.subheader("Create New Account")
+    st.subheader("Create Account")
     name = st.text_input("Full Name")
     email = st.text_input("Email")
     password = st.text_input("Password", type="password")
@@ -64,63 +65,57 @@ if menu == "Signup":
             users[email] = {
                 "name": name,
                 "password": hash_password(password),
-                "balance": 0
+                "balance": 0,
+                "status": "pending"
             }
             save_users(users)
-            st.success("Signup successful! Now login.")
+            st.success("Signup successful. Wait for admin approval.")
 
-if menu == "Login":
-    st.subheader("Login to Your Wallet")
-    email = st.text_input("Email", key="login_email")
-    password = st.text_input("Password", type="password", key="login_password")
+elif menu == "Login":
+    st.subheader("Login")
+    email = st.text_input("Email")
+    password = st.text_input("Password", type="password")
 
     if st.button("Login"):
-        if authenticate(email, password):
-            st.success(f"Welcome {users[email]['name']}!")
+        if email in users and users[email].get("status") == "blocked":
+            st.error("Account is blocked.")
+        elif authenticate(email, password):
+            st.success(f"Welcome {users[email]['name']}")
 
-            option = st.selectbox("Options", ["Check Balance", "Add Money", "Transfer Money", "Withdraw", "Withdraw History", "Recharge", "Profile"])
+            option = st.selectbox("Options", [
+                "Check Balance", "Add Money", "Transfer Money", "Withdraw",
+                "Withdraw History", "Recharge", "Profile", "Export History"
+            ])
 
             if option == "Check Balance":
-                st.info(f"Your current balance: Rs {users[email]['balance']}")
+                st.info(f"Balance: Rs {users[email]['balance']}")
 
-            if option == "Add Money":
-                method = st.selectbox("Select Payment Method", ["JazzCash", "EasyPaisa", "Bank Transfer"])
-                amount = st.number_input("Enter Amount to Add", min_value=10, max_value=100000)
+            elif option == "Add Money":
+                method = st.selectbox("Payment Method", ["JazzCash", "EasyPaisa", "Bank Transfer"])
+                amount = st.number_input("Amount", min_value=10)
 
-                if method == "JazzCash":
-                    st.info("Send money to this JazzCash number: 0300-XXXXXXX")
-                if method == "EasyPaisa":
-                    st.info("Send money to this EasyPaisa number: 0345-XXXXXXX")
-                else:
-                    st.info("Bank Account: 1234567890\nBank: HBL\nTitle: Bilal Wallets")
-
+                st.warning("Live JazzCash/EasyPaisa API integration requires approved credentials.")
                 if st.button("Confirm Payment"):
                     users[email]['balance'] += amount
                     save_users(users)
-                    st.success(f"Rs {amount} added to your wallet via {method}")
+                    st.success(f"Rs {amount} added.")
 
-            if option == "Transfer Money":
-                to_email = st.text_input("Receiver's Email")
-                amount = st.number_input("Amount to transfer", min_value=0)
-
+            elif option == "Transfer Money":
+                to_email = st.text_input("Receiver Email")
+                amount = st.number_input("Transfer Amount", min_value=1)
                 if st.button("Transfer"):
                     if to_email not in users:
                         st.warning("Receiver not found.")
-                    if users[email]['balance'] < amount:
-                        st.warning("Insufficient balance.")
+                    elif users[email]['balance'] < amount:
+                        st.warning("Insufficient funds.")
                     else:
                         users[email]['balance'] -= amount
                         users[to_email]['balance'] += amount
                         save_users(users)
-                        st.success(f"Transferred Rs {amount} to {to_email}")
+                        st.success("Transfer successful.")
 
-            if option == "Withdraw":
-                withdraw_amount = st.number_input("Enter amount to withdraw", min_value=0)
-                MIN_WITHDRAW = 100
-                MAX_WITHDRAW = 10000
-
-                if withdraw_amount < MIN_WITHDRAW or withdraw_amount > MAX_WITHDRAW:
-                    st.error(f"Withdraw amount must be between Rs {MIN_WITHDRAW} and Rs {MAX_WITHDRAW}")
+            elif option == "Withdraw":
+                withdraw_amount = st.number_input("Withdraw Amount", min_value=100, max_value=10000)
                 if st.button("Withdraw Now"):
                     if users[email]['balance'] < withdraw_amount:
                         st.error("Insufficient balance.")
@@ -144,116 +139,59 @@ if menu == "Login":
                             json.dump(withdraws, f)
 
                         send_email_notification(email, withdraw_amount)
-                        st.success("Withdraw request sent. Status: Pending")
+                        st.success("Withdraw request sent.")
 
-            if option == "Withdraw History":
-                st.subheader("Your Withdraw History")
+            elif option == "Withdraw History":
                 if os.path.exists("withdraws.json"):
                     with open("withdraws.json", "r") as f:
-                        all_requests = json.load(f)
-                        user_requests = [r for r in all_requests if r['user'] == email]
+                        all_data = json.load(f)
+                        user_data = [r for r in all_data if r['user'] == email]
+                        for r in user_data:
+                            st.write(f"Rs {r['amount']} | {r['status']} | {r.get('timestamp')}")
 
-                        for req in user_requests:
-                            st.write(f"Rs {req['amount']} | {req['status']} | {req.get('timestamp', 'N/A')}")
-                else:
-                    st.info("No withdraw history yet.")
+            elif option == "Export History":
+                if os.path.exists("withdraws.json"):
+                    with open("withdraws.json", "r") as f:
+                        data = json.load(f)
+                        df = pd.DataFrame([r for r in data if r['user'] == email])
+                        if not df.empty:
+                            st.download_button("Download Excel", df.to_csv(index=False).encode(), "withdraw_history.csv", "text/csv")
 
-            if option == "Recharge":
-                st.subheader("Recharge Mobile Balance")
-                mobile = st.text_input("Enter Mobile Number")
-                operator = st.selectbox("Select Operator", ["Jazz", "Zong", "Telenor", "Ufone"])
-                recharge_amount = st.number_input("Recharge Amount", min_value=10, max_value=5000)
+            elif option == "Recharge":
+                st.write("Recharge option (dummy).")
 
-                if st.button("Recharge Now"):
-                    if users[email]['balance'] < recharge_amount:
-                        st.error("Insufficient balance.")
-                    if len(mobile) != 11 or not mobile.isdigit():
-                        st.error("Enter a valid 11-digit mobile number.")
-                    else:
-                        users[email]['balance'] -= recharge_amount
-                        save_users(users)
-                        st.success(f"Recharge of Rs {recharge_amount} to {mobile} ({operator}) successful.")
-
-            if option == "Profile":
-                st.subheader("Your Profile")
-                user_data = users[email]
-
-                new_name = st.text_input("Name", value=user_data["name"])
-                new_email = st.text_input("Email", value=email)
-                new_password = st.text_input("New Password (leave blank to keep current)", type="password")
-
+            elif option == "Profile":
+                user = users[email]
+                name = st.text_input("Name", value=user["name"])
                 if st.button("Update Profile"):
-                    users.pop(email)
-                    updated_email = new_email if new_email else email
-
-                    users[updated_email] = {
-                        "name": new_name,
-                        "password": user_data["password"] if not new_password else hash_password(new_password),
-                        "balance": user_data["balance"]
-                    }
+                    user["name"] = name
                     save_users(users)
-                    st.success("Profile updated successfully.")
+                    st.success("Updated.")
 
-        else:
-            st.error("Login failed. Check email or password.")
+# ------------------- Admin Panel -------------------
 
-# Admin Panel
 st.sidebar.markdown("---")
 admin_mode = st.sidebar.checkbox("Admin Login")
 
 if admin_mode:
     st.subheader("Admin Panel")
-    admin_user = st.text_input("Admin Username", key="admin_user")
-    admin_pass = st.text_input("Admin Password", type="password", key="admin_pass")
+    admin_user = st.text_input("Admin Username")
+    admin_pass = st.text_input("Admin Password", type="password")
 
     if st.button("Login as Admin"):
         if admin_user == "admin" and admin_pass == "admin123":
-            st.success("Admin logged in.")
+            st.success("Logged in as Admin")
 
-            if os.path.exists("withdraws.json"):
-                with open("withdraws.json", "r") as f:
-                    withdraws = json.load(f)
-
-                for i, req in enumerate(withdraws):
-                    if req["status"] == "Pending":
-                        st.write(f"Request {i+1}: {req['user']} wants to withdraw Rs {req['amount']}")
-
-                        col1, col2 = st.columns(2)
-                        if col1.button(f"Approve {i}", key=f"approve_{i}"):
-                            withdraws[i]["status"] = "Approved"
-                            with open("withdraws.json", "w") as f:
-                                json.dump(withdraws, f)
-                            st.success("Approved.")
-
-                        if col2.button(f"Reject {i}", key=f"reject_{i}"):
-                            withdraws[i]["status"] = "Rejected"
-                            users = load_users()
-                            users[req['user']]['balance'] += req['amount']
-                            save_users(users)
-                            with open("withdraws.json", "w") as f:
-                                json.dump(withdraws, f)
-                            st.warning("Rejected and amount refunded.")
-
-            st.subheader("Dashboard Stats")
-            total_users = len(users)
-            st.info(f"Total Users: {total_users}")
-
-            total_balance = sum(user['balance'] for user in users.values())
-            st.info(f"Total Wallet Balance: Rs {total_balance}")
-
-            if os.path.exists("withdraws.json"):
-                with open("withdraws.json", "r") as f:
-                    withdraws = json.load(f)
-                total_requests = len(withdraws)
-                pending = sum(1 for w in withdraws if w['status'] == "Pending")
-                approved = sum(1 for w in withdraws if w['status'] == "Approved")
-                rejected = sum(1 for w in withdraws if w['status'] == "Rejected")
-
-                st.info(f"Total Withdraw Requests: {total_requests}")
-                st.success(f"Approved: {approved}")
-                st.warning(f"Pending: {pending}")
-                st.error(f"Rejected: {rejected}")
-            else:
-                st.info("No withdraw data found.")
-        else:
-            st.error("Admin credentials incorrect.")
+            st.write("Pending Users:")
+            for u in users:
+                if users[u].get("status") == "pending":
+                    st.write(f"{u} | {users[u]['name']}")
+                    col1, col2 = st.columns(2)
+                    if col1.button(f"Approve {u}", key=f"approve_{u}"):
+                        users[u]["status"] = "active"
+                        save_users(users)
+                        st.success(f"{u} approved.")
+                    if col2.button(f"Block {u}", key=f"block_{u}"):
+                        users[u]["status"] = "blocked"
+                        save_users(users)
+                        st.warning(f"{u} blocked."
